@@ -77,13 +77,13 @@ class ModelLSTM(pl.LightningModule):
     def _save_path(self):
         """
         Create save path for the model.
-        Example: 2023-08-23--12-09_NASDAQ-small_weekly
+        Example: 2023-08-23--12-09_NASDAQ-small
         """
 
         # TODO: Add model information. (Possibly in txt-file inside dir.)
         time = datetime.now().strftime("%Y-%m-%d--%H-%M")
-        data = self.data_dir.split('/')[-2:]
-        run_info = time + '_' + data[0] + '_' + data[1]
+        data = self.data_dir.split('/')[1]
+        run_info = time + '_' + data
         return posixpath.join('results/', run_info)
 
     def forward(self, x, labels=None):
@@ -230,8 +230,8 @@ class ModelLSTM(pl.LightningModule):
 
 
 def main():
-    model = ModelLSTM(data_dir='data/NASDAQ-small/', batch_size=2, debug=False)
-    trainer = pl.Trainer(max_epochs=2, accelerator='cpu', log_every_n_steps=1)
+    model = ModelLSTM(data_dir='data/NASDAQ-small/', batch_size=4, debug=False)
+    trainer = pl.Trainer(max_epochs=1, accelerator='cpu', log_every_n_steps=1)
     trainer.fit(model)
     model.save()
 
