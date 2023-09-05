@@ -11,10 +11,18 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 
 from datasets import DatasetLSTM
+from callbacks import CallbacksLSTM
+
+from pytorch_lightning.loggers import TensorBoardLogger
+
+logger = TensorBoardLogger("tb_logs", name="my_model")
 
 from debug import Debug
 
-# TODO: Make randomized train/val/test split.
+
+# TODO:
+#  1. Make randomized train/val/test split.
+#  2. Use model.train() and model.eval() methods.
 
 
 # TODO: Refactor into models module
@@ -135,8 +143,6 @@ class ModelLSTM(pl.LightningModule):
         Debug.print(f"[training_step] size of labels when loaded: {labels.size()}")
         Debug.print(f"[training_step] size of outputs: {outputs.size()}\n")
 
-        print(f" train_loss: {loss.item()}")  # Always print.
-
         self.train_loss.append(loss.item())
 
         return {"loss": loss}
@@ -160,8 +166,6 @@ class ModelLSTM(pl.LightningModule):
         self.val_labels = labels.detach().numpy()
 
         # self.val_acc(pred, labels)
-
-        print(f" val_loss: {loss.item()}")
 
         self.val_loss.append(loss.item())
 
@@ -230,10 +234,21 @@ class ModelLSTM(pl.LightningModule):
 
 
 def main():
-    model = ModelLSTM(data_dir='data/NASDAQ-small/', batch_size=4, debug=False)
-    trainer = pl.Trainer(max_epochs=1, accelerator='cpu', log_every_n_steps=1)
-    trainer.fit(model)
-    model.save()
+    tb_logger = TensorBoardLogger(save_dir="logs", name="LSTM")
+
+    model = ModelLSTM(data_dir='data/NASDAQ-small/',
+                      batch_size=4,
+                      debug=False
+                      )
+
+    trainer = pl.Trainer(accelerator='cpu',
+                         callbacks=[CallbacksLSTM()],
+                         log_every_n_steps=1,
+                         logger=tb_logger,
+                         max_epochs=3,
+                         )
+
+    trainer.fit(model, ckpt_path=None)
 
 
 if __name__ == "__main__":
