@@ -2,6 +2,7 @@ import os
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from itertools import combinations
 from statsmodels.tsa.ar_model import AutoReg
 from statsmodels.tsa.stattools import adfuller, grangercausalitytests
 
@@ -88,20 +89,28 @@ def adfuller_test():
 def granger_causality_test():
     path = 'data/NASDAQ-small/train'
     filenames = os.listdir(path)
-    filename_pairs = list(zip(filenames, filenames[1:] + filenames[:1]))
+    filename_pairs = combinations(filenames, 2)
 
     for filename1, filename2 in filename_pairs:
         stock1 = Stock(os.path.join(path, filename1))
         stock1.uniform_timespan()
+        stock1.detrend()
 
         stock2 = Stock(os.path.join(path, filename2))
         stock2.uniform_timespan()
+        stock2.detrend()
 
         channel = 'close'
 
         df = pd.merge(stock1.df[channel], stock2.df[channel], right_index=True, left_index=True)
 
+        print()
+        print(f'Investigating whether {stock1.ticker} {channel} price forecasts {stock2.ticker} {channel} price.')
+
         test = grangercausalitytests(df, maxlag=5)
+
+        print()
+        print('-' * 50)
 
     print()
     print('-' * 50)
