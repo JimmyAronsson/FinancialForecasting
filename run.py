@@ -15,9 +15,9 @@ from callbacks import CallbacksLSTM
 
 from pytorch_lightning.loggers import TensorBoardLogger
 
-logger = TensorBoardLogger("tb_logs", name="my_model")
-
 from debug import Debug
+
+logger = TensorBoardLogger("tb_logs", name="my_model")
 
 
 # TODO:
