@@ -10,14 +10,13 @@ from torch.nn import MSELoss
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
+from debug import Debug
 from datasets import DatasetLSTM
 from callbacks import CallbacksLSTM
 
 from pytorch_lightning.loggers import TensorBoardLogger
 
 logger = TensorBoardLogger("tb_logs", name="my_model")
-
-from debug import Debug
 
 
 # TODO:

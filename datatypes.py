@@ -11,7 +11,7 @@ class Stock:
         self.df = self._load_data()
         self.date_range = self._date_range()
 
-        self.trend = None # Trend component of data, see self.detrend()
+        self.trend = None  # Trend component of data, see self.detrend()
 
     def detrend(self, method='ma', res='daily'):
         """
