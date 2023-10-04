@@ -9,7 +9,7 @@ from debug import Debug
 
 
 class DatasetLSTM(Dataset):
-    def __init__(self, data_dir, filelist, prediction_steps=1):
+    def __init__(self, data_dir, filelist, prediction_steps=1, start_date='2000-01-01'):
         """
         Creates data of shape [N, L, Ch] where
            * N = Batch/dataset size
@@ -19,6 +19,7 @@ class DatasetLSTM(Dataset):
         self.data_dir = data_dir
         self.filelist = filelist
         self.steps = prediction_steps
+        self.start_date = start_date
 
         self.date_range = (None, None)
         self.tickers = []
@@ -34,7 +35,7 @@ class DatasetLSTM(Dataset):
         stock = Stock(path=path)
 
         stock.uniform_timespan()
-        stock.set_start_date(start_date='2000-01-01')
+        stock.set_start_date(start_date=self.start_date)
         stock.log_normalize()
         # stock.detrend()
 
