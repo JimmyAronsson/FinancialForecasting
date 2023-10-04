@@ -9,7 +9,7 @@ from debug import Debug
 
 
 class DatasetLSTM(Dataset):
-    def __init__(self, data_dir, pred_ndays=1):
+    def __init__(self, data_dir, filelist, prediction_steps=1):
         """
         Creates data of shape [N, L, Ch] where
            * N = Batch/dataset size
@@ -17,8 +17,8 @@ class DatasetLSTM(Dataset):
            * Ch = Channels
         """
         self.data_dir = data_dir
-        self.filelist = os.listdir(data_dir)
-        self.pred_ndays = pred_ndays
+        self.filelist = filelist
+        self.steps = prediction_steps
 
         self.date_range = (None, None)
         self.tickers = []
@@ -46,8 +46,8 @@ class DatasetLSTM(Dataset):
 
         # trend = ...
 
-        inputs = data[:-self.pred_ndays, :]
-        labels = data[-self.pred_ndays:, :]
+        inputs = data[:-self.steps, :]
+        labels = data[-self.steps:, :]
 
         return {"inputs": inputs, "labels": labels}
 

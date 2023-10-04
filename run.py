@@ -1,4 +1,5 @@
 import os
+import random
 import posixpath
 import pandas as pd
 from datetime import datetime
@@ -26,14 +27,14 @@ logger = TensorBoardLogger("tb_logs", name="my_model")
 
 # TODO: Refactor into models module
 class ModelLSTM(pl.LightningModule):
-    def __init__(self, data_dir, batch_size=1, pred_ndays=100, start_date=None, debug=False):
+    def __init__(self, data_dir, batch_size=1, prediction_steps=12, start_date=None, debug=False):
         super().__init__()
 
         self._debug_status(debug)
 
         self.start_date = start_date
 
-        self.pred_ndays = pred_ndays
+        self.steps = prediction_steps
         self.batch_size = batch_size
         self.hidden = None  # TODO: Create _load_parameters() method
 
@@ -57,16 +58,15 @@ class ModelLSTM(pl.LightningModule):
         # TODO: Remove much of the below. Replace with proper logging.
 
         self.data_dir = data_dir
+        self.train_filelist, self.val_filelist = self._train_val_split()
         self.loss = None
 
-        self.train_dir = posixpath.join(data_dir, 'train')
         self.train_date_range = (None, None)
         self.train_tickers = []
         self.train_pred = None
         self.train_labels = None
         self.train_loss = []
 
-        self.val_dir = posixpath.join(data_dir, 'val')
         self.val_date_range = (None, None)
         self.val_tickers = []
         self.val_pred = None
@@ -93,13 +93,28 @@ class ModelLSTM(pl.LightningModule):
         run_info = time + '_' + data
         return posixpath.join('results/', run_info)
 
+    def _train_val_split(self, train_split=0.8):
+
+        data_filelist = os.listdir(self.data_dir)
+        ntrain = round(train_split * len(data_filelist))
+
+        random.shuffle(data_filelist)
+        train_filelist = data_filelist[:ntrain]
+        val_filelist = data_filelist[ntrain:]
+
+        print("Number of training files: ", len(train_filelist))
+        print("Number of validation files: ", len(val_filelist))
+        print("Number of total files: ", len(data_filelist))
+
+        return train_filelist, val_filelist
+
     def forward(self, x, labels=None):
         hidden = (torch.rand(self.num_layers, self.batch_size, self.hidden_size, requires_grad=True),
                   torch.rand(self.num_layers, self.batch_size, self.hidden_size, requires_grad=True))
 
         # Use previous day's values as initial prediction.
         init_pred = x[:, -1, :].unsqueeze(1)
-        init_pred = init_pred.expand(-1, self.pred_ndays, -1)
+        init_pred = init_pred.expand(-1, self.steps, -1)
 
         # Add initial prediction to x
         x = torch.cat((x, init_pred), dim=1)
@@ -109,7 +124,7 @@ class ModelLSTM(pl.LightningModule):
         x = self.activation(x)
         x = self.linear(x)
 
-        pred = x[:, -self.pred_ndays:, :]
+        pred = x[:, -self.steps:, :]
 
         Debug.print(f"[forward] labels: {labels}")
         Debug.print(f"[forward] pred: {pred}")
@@ -119,8 +134,9 @@ class ModelLSTM(pl.LightningModule):
         return self.loss, x
 
     def train_dataloader(self):
-        config = {'data_dir': self.train_dir,
-                  'pred_ndays': self.pred_ndays}
+        config = {'data_dir': self.data_dir,
+                  'filelist': self.train_filelist,
+                  'prediction_steps': self.steps}
         train_dataset = DatasetLSTM(**config)
         self.train_tickers = train_dataset.get_tickers()
         self.train_date_range = train_dataset.get_date_range()
@@ -132,7 +148,7 @@ class ModelLSTM(pl.LightningModule):
         loss, outputs = self.forward(inputs, labels)
         self.log('train_loss', loss, on_epoch=True)
 
-        pred = outputs[:, -self.pred_ndays:, :]
+        pred = outputs[:, -self.steps:, :]
         self.train_pred = pred.detach().numpy()
         self.train_labels = labels.detach().numpy()
 
@@ -147,8 +163,9 @@ class ModelLSTM(pl.LightningModule):
         return {"loss": loss}
 
     def val_dataloader(self):
-        config = {'data_dir': self.val_dir,
-                  'pred_ndays': self.pred_ndays}
+        config = {'data_dir': self.data_dir,
+                  'filelist': self.val_filelist,
+                  'prediction_steps': self.steps}
         val_dataset = DatasetLSTM(**config)
         self.val_tickers = val_dataset.get_tickers()
         self.val_date_range = val_dataset.get_date_range()
@@ -160,7 +177,7 @@ class ModelLSTM(pl.LightningModule):
         loss, outputs = self.forward(inputs, labels)
         self.log('val_loss', loss, on_epoch=True)
 
-        pred = outputs[:, -self.pred_ndays:, :]
+        pred = outputs[:, -self.steps:, :]
         self.val_pred = pred.detach().numpy()
         self.val_labels = labels.detach().numpy()
 
@@ -198,7 +215,7 @@ class ModelLSTM(pl.LightningModule):
         # FIXME: Fix this. len(train_dates) = FULL length of data, should only be last npred_days.
         train_dates = pd.bdate_range(start=self.train_date_range[0],
                                      end=self.train_date_range[1])
-        train_dates = train_dates[-self.pred_ndays:]
+        train_dates = train_dates[-self.steps:]
 
         print("Length of train_dates: ", len(train_dates))
         print("Length of train_pred[i]: ", len(self.train_pred[0]))
@@ -218,7 +235,7 @@ class ModelLSTM(pl.LightningModule):
         # FIXME: Fix this. len(val_dates) = FULL length of data, should only be last npred_days.
         val_dates = pd.bdate_range(start=self.val_date_range[0],
                                    end=self.val_date_range[1])
-        val_dates = val_dates[-self.pred_ndays:]
+        val_dates = val_dates[-self.steps:]
 
         for i in range(len(self.val_tickers)):
             pred = pd.DataFrame(self.val_pred[i], columns=["open", "high", "low", "close"])
@@ -235,7 +252,7 @@ class ModelLSTM(pl.LightningModule):
 def main():
     tb_logger = TensorBoardLogger(save_dir="logs", name="LSTM")
 
-    model = ModelLSTM(data_dir='data/NASDAQ-small/',
+    model = ModelLSTM(data_dir='data/monthly/NASDAQ-small/',
                       batch_size=4,
                       debug=False
                       )
@@ -244,7 +261,7 @@ def main():
                          callbacks=[CallbacksLSTM()],
                          log_every_n_steps=1,
                          logger=tb_logger,
-                         max_epochs=3,
+                         max_epochs=100,
                          )
 
     trainer.fit(model, ckpt_path=None)

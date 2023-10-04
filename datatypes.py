@@ -44,7 +44,7 @@ class Stock:
     def _load_data(self):
         df = pd.read_csv(self.path, index_col="date", parse_dates=["date"], na_filter=False,
                          usecols=lambda x: x != "ticker")
-        df = df.replace(to_replace=0, value=np.nan).ffill()  # Necessary for log-normalization.
+        df = df.replace(to_replace=0, value=np.nan).ffill()  # Interpolate missing values.
 
         return df
 
