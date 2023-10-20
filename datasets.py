@@ -10,7 +10,7 @@ from preprocessing import log_normalize
 
 
 class DatasetLSTM(Dataset):
-    def __init__(self, data_dir, filelist, forecast_steps=1, start_date='2000-01-01', final_date='2020-01-01'):
+    def __init__(self, data_dir, filelist, forecast_steps=1, start_date='2000-01-01', final_date='2020-01-01', **kwargs):
         """
         Creates data of shape [N, L, Ch] where
            * N = Batch/dataset size
@@ -59,3 +59,13 @@ class DatasetLSTM(Dataset):
         # trend = ...
 
         return time_series
+
+    def get_item(self, stock_id, inputs_and_labels=False):
+        time_series = self.__getitem__(stock_id)
+
+        if inputs_and_labels:
+            inputs = time_series[:-self.steps, :]
+            label = time_series[-self.steps:, :]
+            return inputs, label
+        else:
+            return time_series
