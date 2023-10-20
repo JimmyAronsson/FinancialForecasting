@@ -6,7 +6,6 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 
-from debug import Debug
 from models import ModelLSTM
 from loggers import LSTMLogger
 from datasets import DatasetLSTM
@@ -15,10 +14,10 @@ from callbacks import CallbacksLSTM
 
 class FinancialForecaster(pl.LightningModule):
     def __init__(self, model, data_dir, batch_size=1, forecast_steps=12,
-                 start_date=None, final_date=None, train_split=0.8, debug=False, **kwargs):
+                 start_date=None, final_date=None, train_split=0.8, **kwargs):
         super().__init__()
 
-        self._debug_status(debug)
+        # TODO: Refactor dates, steps, etc. into config data structure
 
         self.start_date = start_date
         self.final_date = final_date
@@ -26,28 +25,14 @@ class FinancialForecaster(pl.LightningModule):
         self.steps = forecast_steps
         self.batch_size = batch_size
 
-        self.model = model
-
-        self.criterion = MSELoss()
-
-        # TODO: Remove much of the below. Replace with proper logging.
-
         self.data_dir = data_dir
+        # TODO: The below should not be run e.g. in EvaluateForecaster.__init__(). Refactor?
         self.train_filelist, self.val_filelist = self._train_val_split(train_split)
 
-        self.loss = None
-        self.train_loss = []
-        self.val_loss = []
+        self.model = model
+        self.criterion = MSELoss()  # TODO: Refactor?
 
         self.save_hyperparameters()
-
-        # self.train_acc = torchmetrics.Accuracy()
-        # self.val_acc = torchmetrics.Accuracy()
-
-    @staticmethod
-    def _debug_status(debug):
-        Debug.set_status(debug)
-        torch.set_printoptions(threshold=200)  # Threshold for summarizing tensors rather than full repr.
 
     def _train_val_split(self, train_split=0.8):
         data_filelist = os.listdir(self.data_dir)
@@ -56,10 +41,6 @@ class FinancialForecaster(pl.LightningModule):
         random.shuffle(data_filelist)
         train_filelist = data_filelist[:ntrain]
         val_filelist = data_filelist[ntrain:]
-
-        print("Number of training files: ", len(train_filelist))
-        print("Number of validation files: ", len(val_filelist))
-        print("Number of total files: ", len(data_filelist))
 
         return train_filelist, val_filelist
 
@@ -84,24 +65,13 @@ class FinancialForecaster(pl.LightningModule):
         return DataLoader(train_dataset, batch_size=self.batch_size, num_workers=4)
 
     def training_step(self, batch, batch_idx):
-        ground_truth = batch
+        ground_truth = batch  # Ground truth (historic and forwards)
+        gt_historic = ground_truth[:, :-self.steps, :]
 
-        inputs = ground_truth[:, :-self.steps, :]
-        labels = ground_truth[:, -self.steps:, :]
-
-        forecast = self.forward(inputs)
-        forecast_future = forecast[:, -self.steps:, :]
-
-        Debug.print(f"[training_step] labels: {labels}")
-        Debug.print(f"[training_step] forecast_future: {forecast_future}")
+        forecast = self.forward(gt_historic)
 
         loss = self.criterion(ground_truth, forecast)
-        # loss = self.criterion(preds, labels)
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
-
-        Debug.print(f"[training_step] size of inputs when loaded: {inputs.size()}")
-        Debug.print(f"[training_step] size of labels when loaded: {labels.size()}")
-        Debug.print(f"[training_step] size of forecast: {forecast.size()}\n")
 
         return {"loss": loss}
 
@@ -114,19 +84,12 @@ class FinancialForecaster(pl.LightningModule):
         return DataLoader(val_dataset, batch_size=self.batch_size, num_workers=4)
 
     def validation_step(self, batch, batch_idx):
-        ground_truth = batch  # Historic and future data
+        ground_truth = batch  # Ground truth (historic and forwards)
+        gt_historic = ground_truth[:, :-self.steps, :]
 
-        inputs = ground_truth[:, :-self.steps, :]  # Historic
-        labels = ground_truth[:, -self.steps:, :]  # Future
-
-        forecast = self.forward(inputs)  # Historic and future forecast
-        forecast_future = forecast[:, -self.steps:, :]
-
-        Debug.print(f"[validation_step] labels: {labels}")
-        Debug.print(f"[validation_step] forecast_future: {forecast_future}")
+        forecast = self.forward(gt_historic)
 
         loss = self.criterion(ground_truth, forecast)
-        # loss = self.criterion(preds, labels)
         self.log('val_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
         return {"loss": loss}
@@ -155,16 +118,13 @@ def main():
     logger = LSTMLogger(save_dir="logs", name="LSTM")
     logger.make_log_dir()
 
-    model = ModelLSTM()
-
-    forecaster = FinancialForecaster(model=model,
+    forecaster = FinancialForecaster(model=ModelLSTM(),
                                      data_dir='data/monthly/NASDAQ-tiny/',
                                      train_split=0.5,
                                      start_date='2021-01-01',
                                      final_date='2023-01-01',
                                      forecast_steps=5,
                                      batch_size=1,
-                                     debug=False,
                                      )
 
     trainer = pl.Trainer(accelerator='cpu',
@@ -172,7 +132,9 @@ def main():
                          logger=logger,
                          max_epochs=3000,
                          )
+
     forecaster.log_run_info(logger.log_dir)
+
     trainer.fit(forecaster, ckpt_path=None)
     
 

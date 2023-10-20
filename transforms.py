@@ -1,7 +1,3 @@
-import os
-import numpy as np
-import pandas as pd
-
 from statsmodels.tsa.filters.hp_filter import hpfilter
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from statsmodels.tsa.seasonal import seasonal_decompose
