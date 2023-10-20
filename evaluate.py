@@ -12,90 +12,80 @@ import matplotlib.pyplot as plt
 from run import FinancialForecaster
 
 
-def evaluate(start_month='2000-01',end_date='2022-07'):
-    # Step 1: Load the checkpoint
-    log_dir = './logs/LSTMLogger/version_18/'
-    ckpt_dir = os.path.join(log_dir, 'checkpoints')
-    ckpt_path = os.path.join(ckpt_dir, os.listdir(ckpt_dir)[-1])
-    hparams_file = os.path.join(log_dir, 'hparams.yaml')
-    ckpt = torch.load(ckpt_path)
+class EvaluateForecaster():
+    def __init__(self, log_dir):
+        self.log_dir = log_dir
+        self.config = self._create_config()
 
-    with open(os.path.join(log_dir, 'run_info.txt')) as f:
-        # Read from file and split each line into parameter, value pairs
-        run_info = [line.split(':\t') for line in f.read().splitlines()]
-        config = dict((parameter, value) for parameter, value in run_info)
+        self.dataset = DatasetLSTM(data_dir=self.config['data_dir'],
+                                   filelist=self.config['val_filelist'],
+                                   forecast_steps=self.config['forecast_steps'])
+        self.model = self._load_model()
+        self.forecaster = FinancialForecaster(model=self.model, **self.config)
 
-        # Turn string "['ABC', ..., 'XYZ']" into list ['ABC', ..., 'XYZ']
-        config['train_filelist'] = ast.literal_eval(config['train_filelist'])
-        config['val_filelist'] = ast.literal_eval(config['val_filelist'])
-        config['forecast_steps'] = int(config['forecast_steps'])
-        config['batch_size'] = int(config['batch_size'])
+    def _create_config(self):
 
-    ic(config)
+        with open(os.path.join(self.log_dir, 'run_info.txt')) as f:
+            # Read from file and split each line into parameter, value pairs
+            run_info = [line.split(':\t') for line in f.read().splitlines()]
+            config = dict((parameter, value) for parameter, value in run_info)
 
-    # FIXME: Used to remove 'model.' from all keys. Clean this up.
-    tmp = {}
-    for key, value in ckpt['state_dict'].items():
-        tmp[key.removeprefix('model.')] = value
-    ckpt['state_dict'] = tmp
+            # Turn string "['ABC', ..., 'XYZ']" into list ['ABC', ..., 'XYZ']
+            config['train_filelist'] = ast.literal_eval(config['train_filelist'])
+            config['val_filelist'] = ast.literal_eval(config['val_filelist'])
+            config['forecast_steps'] = int(config['forecast_steps'])
+            config['batch_size'] = int(config['batch_size'])
 
-    # Step 2: Create the model
-    model = ModelLSTM()
-    model.load_state_dict(state_dict=ckpt['state_dict'])
-    forecaster = FinancialForecaster(model=model,
-                                     **config
-                                     )
-    """
-    model = ModelLSTM.load_from_checkpoint(
-        data_dir=config['data_dir'],
-        debug=True,
-        checkpoint_path=ckpt_path,
-        hparams_file=hparams_file,
-        map_location=None
-    )"""
+        return config
 
-    dataset = DatasetLSTM(data_dir=config['data_dir'],
-                          filelist=config['val_filelist'],
-                          forecast_steps=config['forecast_steps'])
+    def _load_model(self, ckpt_index=-1):
+        ckpt_dir = os.path.join(self.log_dir, 'checkpoints')
+        ckpt_path = os.path.join(ckpt_dir, os.listdir(ckpt_dir)[ckpt_index])  # (default: latest checkpoint)
+        ckpt = torch.load(ckpt_path)
 
-    """
-    trainer = pl.Trainer()
-    predictions = trainer.predict(forecaster, dataset)
-    #print(data)
-    print(predictions)
+        # FIXME: Used to remove 'model.' from all keys. Clean this up.
+        state_dict = {}
+        for key, value in ckpt['state_dict'].items():
+            state_dict[key.removeprefix('model.')] = value
+        ckpt['state_dict'] = state_dict
 
-    print(predictions[0][0][0].size())
-    print(predictions[0][1].size())
-    """
-    input, label = dataset.__getitem__(0)
-    print('size of input:', input.size())
-    print('size of label:', label.size())
-    prediction = forecaster.forward(input.unsqueeze(0))[0, :, :]  # TODO: Generalize forward to not need batch dimension
-    print('size of prediction:', prediction.size())
+        model = ModelLSTM()
+        model.load_state_dict(state_dict=ckpt['state_dict'])
 
-    input = input.detach().numpy()
-    label = label.detach().numpy()
-    prediction = prediction.detach().numpy()
+        return model
 
-    fig, ax = plt.subplots(4)
+    def eval(self, stock_id=0):
+        inputs, labels = self.dataset.get_item(stock_id=stock_id, inputs_and_labels=True)
 
-    axis = range(0, len(prediction[:, 0]))
-    input_axis = axis[:len(input[:, 0])]
-    label_axis = axis[len(input[:, 0]):]
+        print('size of inputs:', inputs.size())
+        print('size of label:', labels.size())
+        prediction = self.forecaster.forward(inputs)[0, :, :]  # TODO: Generalize forward to not need batch dimension
+        print('size of prediction:', prediction.size())
 
-    titles = ['open', 'high', 'low', 'close']
-    for i in range(4):
-        ax[i].set_title(titles[i])
-        ax[i].plot(input_axis, input[:, i], label='Input data')
-        ax[i].plot(label_axis, label[:, i], label='Forecast ground truth')
-        ax[i].plot(axis, prediction[:, i], label='Forecast prediciton')
-        ax[i].legend()
+        inputs = inputs.detach().numpy()
+        labels = labels.detach().numpy()
+        prediction = prediction.detach().numpy()
 
-    plt.show()
+        axis = range(0, len(prediction[:, 0]))
+        input_axis = axis[:len(inputs[:, 0])]
+        label_axis = axis[len(inputs[:, 0]):]
+        titles = ['open', 'high', 'low', 'close']
+
+        fig, ax = plt.subplots(4)
+        for i in range(4):
+            ax[i].set_title(titles[i])
+            ax[i].plot(input_axis, inputs[:, i], label='Input data')
+            ax[i].plot(label_axis, labels[:, i], label='Forecast ground truth')
+            ax[i].plot(axis, prediction[:, i], label='Forecast prediciton')
+            ax[i].legend()
+
+        plt.show()
 
 
 def main():
-    evaluate()
+    evaluator = EvaluateForecaster(log_dir='./logs/LSTMLogger/version_24')
+    evaluator.eval(stock_id=0)
+
 
 if __name__ == '__main__':
     main()
