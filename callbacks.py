@@ -7,7 +7,9 @@ class CallbacksLSTM(pl.Callback):
         super(CallbacksLSTM, self).__init__()
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        print("Train loss: ",  outputs["loss"].item())
+        # print("Train loss: ",  outputs["loss"].item())
+        pass
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        print("Validation loss: ",  outputs["loss"].item())
+        # print("Validation loss: ",  outputs["loss"].item())
+        pass
