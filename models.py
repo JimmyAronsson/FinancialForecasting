@@ -1,41 +1,53 @@
-import torch
 import torch.nn as nn
-import pytorch_lightning as pl
-
-
-class BaseModel(pl.LightningModule):
-    """Financial forecasting base model"""
-
-    def __init__(self):
-        super().__init__()
-        # self.weights = ...
-        # self.biases = ...
-
-        self.loss = None
-
-    def forward(self, inputs, target):
-        return self.model(inputs, target)
-
 
 class ModelLSTM(nn.Module):
-    def __init__(self, batch_size, nlayers, input_size, hidden_size):
+    def __init__(self):
         super().__init__()
-        self.h0 = torch.zeros(nlayers, batch_size, hidden_size)
-        self.c0 = torch.zeros(nlayers, batch_size, hidden_size)
 
-        self.lstm = nn.LSTM(input_size=input_size,
-                            hidden_size=hidden_size,
-                            num_layers=nlayers,
-                            batch_first=True,
-                            # proj_size=self.input_size,
-                            # dropout=0.3,
-                            )
-        self.linear = nn.Linear(hidden_size, 4)
+        self.nlayers = 10
+        self.input_size = 4
+        self.hidden_size = 100
+
+        self.lstm1 = nn.LSTM(input_size=self.input_size,
+                             hidden_size=self.hidden_size,
+                             num_layers=self.nlayers,
+                             batch_first=True,
+                             )
+
+        self.lstm2 = nn.LSTM(input_size=self.hidden_size,
+                             hidden_size=self.hidden_size,
+                             num_layers=self.nlayers,
+                             batch_first=True,
+                             )
+
+        self.conv1 = nn.Conv1d(in_channels=self.hidden_size,
+                               out_channels=self.hidden_size,
+                               kernel_size=9,
+                               dilation=1,
+                               padding=4,
+                               stride=1
+                               )
+
+        self.conv2 = nn.Conv1d(in_channels=self.hidden_size,
+                               out_channels=self.hidden_size,
+                               kernel_size=5,
+                               dilation=1,
+                               padding=2,
+                               stride=1
+                               )
+
+        self.linear = nn.Linear(self.hidden_size, 4)
         self.activation = nn.ReLU()
 
     def forward(self, x):
-        x, (h, c) = self.lstm(x, (self.h0, self.c0))
+        x, (h, c) = self.lstm1(x)
         x = self.activation(x)
+        x = self.conv1(x.permute(0, 2, 1)).permute(0, 2, 1)
+
+        x, (_, _) = self.lstm2(x, (h, c))
+        x = self.activation(x)
+        x = self.conv2(x.permute(0, 2, 1)).permute(0, 2, 1)
+
         x = self.linear(x)
 
         return x

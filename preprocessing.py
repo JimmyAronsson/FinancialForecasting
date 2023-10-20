@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pandas as pd
 
 from datatypes import Stock
@@ -42,12 +43,56 @@ def resample_data(freq=None):
             df_aggregate.to_csv(path_or_buf=save_path, index=False)
 
 
+def log_normalize(p: pd.DataFrame) -> (pd.DataFrame, pd.DataFrame):
+    """
+    Given a time series p(t), computes its log-normalization
+    y(t) = log( p(t) / p(t-1) )
+
+    and the initial value
+
+    y0 = log( p(0) ).
+    """
+
+    y0 = np.log(p.head(1))
+    y = (p / p.shift(periods=1)).fillna(1).apply(lambda x: np.log(x))
+
+    return y0, y
+
+
+def log_denormalize(y0: pd.DataFrame, y: pd.DataFrame) -> (pd.DataFrame):
+    """
+    Returns a time series p(t) from its log-normalization
+
+    y(t) = log( p(t) / p(t-1) )
+
+    and its initial value
+
+    y0 = log( p(0) ).
+    """
+
+    log_p = y0.values + y.cumsum()
+    p = log_p.apply(lambda x: np.exp(x))
+
+    return p
+
+
 def main():
     """
     resample_data('B')
     resample_data('W')
     resample_data('M')
     """
+    df = Stock('./data/daily/NASDAQ-small/SXP.csv').df
+    x0, x = log_normalize(df)
+    print('x0 type: ', type(x0))
+    print('x type: ', type(x))
+
+    p = log_denormalize(x0, x)
+    print('p type: ', type(p))
+
+    print(df.head())
+    print(x.head())
+    print(p.head())
 
 
 if __name__ == "__main__":

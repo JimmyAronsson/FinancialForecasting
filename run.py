@@ -4,6 +4,8 @@ import posixpath
 import pandas as pd
 from datetime import datetime
 
+from icecream import ic
+
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
@@ -18,8 +20,7 @@ from models import ModelLSTM
 
 from pytorch_lightning.loggers import TensorBoardLogger
 
-logger = TensorBoardLogger("tb_logs", name="my_model")
-
+from loggers import LSTMLogger
 
 # TODO:
 #  1. Make randomized train/val/test split.
@@ -28,17 +29,16 @@ logger = TensorBoardLogger("tb_logs", name="my_model")
 
 # TODO: Refactor into models module
 class FinancialForecaster(pl.LightningModule):
-    def __init__(self, model, data_dir, tb_logger=None, batch_size=1, prediction_steps=12, start_date=None,
-                 debug=False):
+    def __init__(self, model, data_dir, batch_size=1, forecast_steps=12,
+                 start_date=None, final_date=None, train_split=0.8, debug=False, **kwargs):
         super().__init__()
-
-        self.tb_logger = tb_logger
 
         self._debug_status(debug)
 
         self.start_date = start_date
+        self.final_date = final_date
 
-        self.steps = prediction_steps
+        self.steps = forecast_steps
         self.batch_size = batch_size
 
         self.model = model
@@ -48,19 +48,13 @@ class FinancialForecaster(pl.LightningModule):
         # TODO: Remove much of the below. Replace with proper logging.
 
         self.data_dir = data_dir
-        self.train_filelist, self.val_filelist = self._train_val_split()
-
-        self._log_files()
+        self.train_filelist, self.val_filelist = self._train_val_split(train_split)
 
         self.loss = None
-
-        self.train_pred = None
-        self.train_labels = None
         self.train_loss = []
-
-        self.val_pred = None
-        self.val_labels = None
         self.val_loss = []
+
+        self.save_hyperparameters()
 
         # self.train_acc = torchmetrics.Accuracy()
         # self.val_acc = torchmetrics.Accuracy()
@@ -70,35 +64,7 @@ class FinancialForecaster(pl.LightningModule):
         Debug.set_status(debug)
         torch.set_printoptions(threshold=200)  # Threshold for summarizing tensors rather than full repr.
 
-    def _log_files(self):
-        if self.tb_logger is None:
-            return
-
-        log_dir = self.tb_logger.log_dir
-        os.mkdir(log_dir)
-        with open(os.path.join(log_dir, 'data_dir.txt'), 'w') as f:
-            f.write(self.data_dir)
-        with open(os.path.join(log_dir, 'train_filelist.txt'), 'w') as f:
-            for file in self.train_filelist:
-                f.write(file + '\n')
-        with open(os.path.join(log_dir, 'val_filelist.txt'), 'w') as f:
-            for file in self.val_filelist:
-                f.write(file + '\n')
-
-    def _save_path(self):
-        """
-        Create save path for the model.
-        Example: 2023-08-23--12-09_NASDAQ-small
-        """
-
-        # TODO: Add model information. (Possibly in txt-file inside dir.)
-        time = datetime.now().strftime("%Y-%m-%d--%H-%M")
-        data = self.data_dir.split('/')[1]
-        run_info = time + '_' + data
-        return posixpath.join('results/', run_info)
-
     def _train_val_split(self, train_split=0.8):
-
         data_filelist = os.listdir(self.data_dir)
         ntrain = round(train_split * len(data_filelist))
 
@@ -112,7 +78,11 @@ class FinancialForecaster(pl.LightningModule):
 
         return train_filelist, val_filelist
 
-    def forward(self, x, labels=None):
+    def forward(self, x):
+        x = x[0]
+
+        if len(x.size()) == 2:
+            x = x.unsqueeze(0)
 
         # Use previous day's values as initial prediction.
         init_pred = x[:, -1, :].unsqueeze(1)
@@ -127,56 +97,56 @@ class FinancialForecaster(pl.LightningModule):
     def train_dataloader(self):
         train_dataset = DatasetLSTM(data_dir=self.data_dir,
                                     filelist=self.train_filelist,
-                                    prediction_steps=self.steps,
-                                    start_date=self.start_date)
+                                    forecast_steps=self.steps,
+                                    start_date=self.start_date,
+                                    final_date=self.final_date)
         return DataLoader(train_dataset, batch_size=self.batch_size, num_workers=4)
 
     def training_step(self, batch, batch_idx):
-        inputs, labels = batch["inputs"], batch["labels"]
+        ground_truth = batch
 
-        outputs = self.forward(inputs, labels)
-        preds = outputs[:, -self.steps:, :]
+        inputs = ground_truth[:, :-self.steps, :]
+        labels = ground_truth[:, -self.steps:, :]
+
+        forecast = self.forward(inputs)
+        forecast_future = forecast[:, -self.steps:, :]
 
         Debug.print(f"[training_step] labels: {labels}")
-        Debug.print(f"[training_step] pred: {preds}")
+        Debug.print(f"[training_step] forecast_future: {forecast_future}")
 
-        loss = self.criterion(preds, labels)
-        self.log('train_loss', loss, on_epoch=True)
-
-        self.train_pred = preds.detach().numpy()
-        self.train_labels = labels.detach().numpy()
-
-        # self.train_acc(pred, labels)
+        loss = self.criterion(ground_truth, forecast)
+        # loss = self.criterion(preds, labels)
+        self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
         Debug.print(f"[training_step] size of inputs when loaded: {inputs.size()}")
         Debug.print(f"[training_step] size of labels when loaded: {labels.size()}")
-        Debug.print(f"[training_step] size of outputs: {outputs.size()}\n")
+        Debug.print(f"[training_step] size of forecast: {forecast.size()}\n")
 
         return {"loss": loss}
 
     def val_dataloader(self):
         val_dataset = DatasetLSTM(data_dir=self.data_dir,
                                   filelist=self.val_filelist,
-                                  prediction_steps=self.steps,
-                                  start_date=self.start_date)
+                                  forecast_steps=self.steps,
+                                  start_date=self.start_date,
+                                  final_date=self.final_date)
         return DataLoader(val_dataset, batch_size=self.batch_size, num_workers=4)
 
     def validation_step(self, batch, batch_idx):
-        inputs, labels = batch["inputs"], batch["labels"]
+        ground_truth = batch  # Historic and future data
 
-        outputs = self.forward(inputs, labels)
-        preds = outputs[:, -self.steps:, :]
+        inputs = ground_truth[:, :-self.steps, :]  # Historic
+        labels = ground_truth[:, -self.steps:, :]  # Future
+
+        forecast = self.forward(inputs)  # Historic and future forecast
+        forecast_future = forecast[:, -self.steps:, :]
 
         Debug.print(f"[validation_step] labels: {labels}")
-        Debug.print(f"[validation_step] pred: {preds}")
+        Debug.print(f"[validation_step] forecast_future: {forecast_future}")
 
-        loss = self.criterion(preds, labels)
-        self.log('val_loss', loss, on_epoch=True)
-
-        self.val_pred = preds.detach().numpy()
-        self.val_labels = labels.detach().numpy()
-
-        # self.val_acc(pred, labels)
+        loss = self.criterion(ground_truth, forecast)
+        # loss = self.criterion(preds, labels)
+        self.log('val_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
 
         return {"loss": loss}
 
@@ -184,32 +154,47 @@ class FinancialForecaster(pl.LightningModule):
         optimizer = Adam(self.model.parameters())
         return optimizer
 
+    def predict_step(self, batch, batch_idx: int, dataloader_idx: int = None):
+        return batch, self(batch)
+
+    def log_run_info(self, log_dir):
+        with open(os.path.join(log_dir, 'run_info.txt'), 'w') as f:
+            f.write(f'data_dir:\t{self.data_dir}')
+
+            f.write(f'\nstart_date:\t{self.start_date}')
+            f.write(f'\nfinal_date:\t{self.final_date}')
+            f.write(f'\nforecast_steps:\t{self.steps}')
+            f.write(f'\nbatch_size:\t{self.batch_size}')
+
+            f.write(f'\ntrain_filelist:\t{self.train_filelist}')
+            f.write(f'\nval_filelist:\t{self.val_filelist}')
+
 
 def main():
-    tb_logger = TensorBoardLogger(save_dir="logs", name="LSTM")
+    logger = LSTMLogger(save_dir="logs", name="LSTM")
+    logger.make_log_dir()
 
-    model = ModelLSTM(batch_size=4,
-                      nlayers=10,
-                      input_size=4,
-                      hidden_size=20)
+    model = ModelLSTM()
 
-    model = FinancialForecaster(model=model,
-                                data_dir='data/monthly/NASDAQ-small/',
-                                start_date='2000-01-01',
-                                tb_logger=tb_logger,
-                                batch_size=4,
-                                debug=False,
-                                )
+    forecaster = FinancialForecaster(model=model,
+                                     data_dir='data/monthly/NASDAQ-tiny/',
+                                     train_split=0.5,
+                                     start_date='2021-01-01',
+                                     final_date='2023-01-01',
+                                     forecast_steps=5,
+                                     batch_size=1,
+                                     debug=False,
+                                     )
 
     trainer = pl.Trainer(accelerator='cpu',
                          callbacks=[CallbacksLSTM()],
-                         log_every_n_steps=1,
-                         logger=tb_logger,
-                         max_epochs=200,
+                         logger=logger,
+                         log_every_n_steps=20,
+                         max_epochs=3000,
                          )
-
-    trainer.fit(model, ckpt_path=None)
-
+    forecaster.log_run_info(logger.log_dir)
+    trainer.fit(forecaster, ckpt_path=None)
+    
 
 if __name__ == "__main__":
     main()
