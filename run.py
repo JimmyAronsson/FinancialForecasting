@@ -1,33 +1,18 @@
 import os
 import random
-import posixpath
-import pandas as pd
-from datetime import datetime
-
-from icecream import ic
-
-import pytorch_lightning as pl
 import torch
-import torch.nn as nn
 from torch.nn import MSELoss
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+import pytorch_lightning as pl
 
 from debug import Debug
+from models import ModelLSTM
+from loggers import LSTMLogger
 from datasets import DatasetLSTM
 from callbacks import CallbacksLSTM
-from models import ModelLSTM
-
-from pytorch_lightning.loggers import TensorBoardLogger
-
-from loggers import LSTMLogger
-
-# TODO:
-#  1. Make randomized train/val/test split.
-#  2. Use model.train() and model.eval() methods.
 
 
-# TODO: Refactor into models module
 class FinancialForecaster(pl.LightningModule):
     def __init__(self, model, data_dir, batch_size=1, forecast_steps=12,
                  start_date=None, final_date=None, train_split=0.8, debug=False, **kwargs):
@@ -79,20 +64,16 @@ class FinancialForecaster(pl.LightningModule):
         return train_filelist, val_filelist
 
     def forward(self, x):
-        x = x[0]
-
-        if len(x.size()) == 2:
+        if x.dim() == 2:  # If unbached
             x = x.unsqueeze(0)
 
-        # Use previous day's values as initial prediction.
-        init_pred = x[:, -1, :].unsqueeze(1)
-        init_pred = init_pred.expand(-1, self.steps, -1)
-        # Add initial prediction to x
-        x = torch.cat((x, init_pred), dim=1)
+        # Use last day's values as initial future forecast and add to x
+        x_forward_steps = x[:, -1, :].unsqueeze(1).expand(-1, self.steps, -1)
+        x = torch.cat((x, x_forward_steps), dim=1)
 
-        Debug.print(f"[forward] size of x after cat: {x.size()}")  # [N, L, Ch]
+        forecast = self.model.forward(x)
 
-        return self.model.forward(x)
+        return forecast
 
     def train_dataloader(self):
         train_dataset = DatasetLSTM(data_dir=self.data_dir,
@@ -189,7 +170,6 @@ def main():
     trainer = pl.Trainer(accelerator='cpu',
                          callbacks=[CallbacksLSTM()],
                          logger=logger,
-                         log_every_n_steps=20,
                          max_epochs=3000,
                          )
     forecaster.log_run_info(logger.log_dir)
