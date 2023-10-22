@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 
 from callbacks import FFCallback
-from configs import FFConfig
+from dataconfigs import FFConfig
 from forecasters import FinancialForecaster
 from loggers import FFLogger
 

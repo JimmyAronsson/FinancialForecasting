@@ -4,7 +4,7 @@ from typing import Literal
 import torch
 from torch.utils.data import Dataset
 
-from configs import FFConfig
+from dataconfigs import FFConfig
 from datatypes import Stock
 from preprocessing import log_normalize
 
