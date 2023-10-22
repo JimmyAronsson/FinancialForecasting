@@ -3,18 +3,20 @@ import ast
 import torch
 import matplotlib.pyplot as plt
 
-from models import ModelLSTM
+import models
 from datasets import DatasetLSTM
 from run import FinancialForecaster  # TODO: Shouldn't need to import from run. Refactor.
 
 
-class EvaluateForecaster():
+class EvaluateForecaster:
     def __init__(self, log_dir):
         self.log_dir = log_dir
         self.config = self._create_config()
 
         self.dataset = DatasetLSTM(data_dir=self.config['data_dir'],
                                    filelist=self.config['val_filelist'],
+                                   start_date=self.config['start_date'],
+                                   final_date=self.config['final_date'],
                                    forecast_steps=self.config['forecast_steps'])
         self.model = self._load_model()
         self.forecaster = FinancialForecaster(model=self.model, **self.config)
@@ -45,7 +47,8 @@ class EvaluateForecaster():
             state_dict[key.removeprefix('model.')] = value
         ckpt['state_dict'] = state_dict
 
-        model = ModelLSTM()
+        model = getattr(models, self.config['model_name'])()  # Extracts and instantiates e.g. SmallLSTM from models.py
+
         model.load_state_dict(state_dict=ckpt['state_dict'])
 
         return model
@@ -79,7 +82,7 @@ class EvaluateForecaster():
 
 
 def main():
-    evaluator = EvaluateForecaster(log_dir='./logs/LSTMLogger/version_24')
+    evaluator = EvaluateForecaster(log_dir='./logs/LSTMLogger/version_7')
     evaluator.eval(stock_id=0)
 
 
