@@ -134,17 +134,25 @@ class EvaluateForecaster:
         model = self.config.model_name
         ticker = self._get_ticker()
 
-        fig, ax = plt.subplots(4)
-        fig.suptitle(f'{ticker} forecast using {model} @ {epoch} epochs')
-
+        fig, ax = plt.subplots(2, 2)
+        fig.suptitle(f'{model} forecast of {ticker} after {epoch} epochs')
         titles = ['open', 'high', 'low', 'close']
-        for i in range(4):
-            ax[i].set_title(titles[i])
-            ax[i].plot(input_axis, inputs[:, i], label='Input data')
-            ax[i].plot(label_axis, labels[:, i], label='Forecast ground truth')
-            ax[i].plot(axis, forecast[:, i], label='Forecast prediciton')
-            ax[i].legend()
 
+        k = 0
+        for i in range(2):
+            for j in range(2):
+                ax[i, j].set_title(titles[k])
+                ax[i, j].plot(input_axis, inputs[:, k], label='Input data')
+                ax[i, j].plot(label_axis, labels[:, k], label='Forecast ground truth')
+                ax[i, j].plot(axis, forecast[:, k], label='Forecast prediciton')
+
+                ax[i, j].set_xlabel('month')
+                ax[i, j].set_ylabel('USD ($)')
+                ax[i, j].legend()
+                k += 1
+
+        fig.tight_layout()
+        
         plt.show()
 
 
