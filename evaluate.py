@@ -2,10 +2,12 @@ import ast
 import os
 
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 
 from dataconfigs import FFConfig
 from datasets import StockDataset
+from datatypes import Stock
 from forecasters import FinancialForecaster
 
 
@@ -58,6 +60,18 @@ class EvaluateForecaster:
 
         return epoch
 
+    # TODO: Refactor to transforms.py
+    def _get_initvals(self):
+        """Extract stock values at start date"""
+        filename = self.config.filelist['val'][self.stock_id]
+        filepath = os.path.join(self.config.data_dir, filename)
+        stock = Stock(filepath)
+
+        row = stock.get_row(date=self.config.time_period[0])
+        initvals = row.to_numpy()
+
+        return initvals
+
     def _get_ticker(self):
         filename = self.config.filelist['val'][self.stock_id]
         ticker = filename.removesuffix('.csv')
@@ -71,14 +85,42 @@ class EvaluateForecaster:
 
         return model
 
-    def eval(self):
-        inputs, labels = self.dataset.get_item(stock_id=self.stock_id, inputs_and_labels=True)
+    # TODO: Refactor to transforms.py
+    def _log_denormalize(self, y):
+        """
+        Returns a time series p(t) from its log-normalization
 
+        y(t) = log( p(t) / p(t-1) )
+
+        and its initial value
+
+        y0 = log( p(0) ).
+        """
+
+        nsteps = y.shape[0]
+
+        y0 = self._get_initvals()
+        y0 = np.log(y0)
+        y0 = np.array([y0] * nsteps)
+
+        log_p = y0 + np.cumsum(y, axis=1)
+        p = np.exp(log_p)
+
+        return p
+
+    def eval(self):
+        timeseries = self.dataset.get_item(stock_id=self.stock_id)
+        inputs = timeseries[:-self.config.forecast_steps, :]
         forecast = self.forecaster.forward(inputs)[0, :, :]
 
-        inputs = inputs.detach().numpy()
-        labels = labels.detach().numpy()
+        timeseries = timeseries.detach().numpy()
+        timeseries = self._log_denormalize(timeseries)
+
+        inputs = timeseries[:-self.config.forecast_steps, :]
+        labels = timeseries[-self.config.forecast_steps:, :]
+
         forecast = forecast.detach().numpy()
+        forecast = self._log_denormalize(forecast)
 
         self.plot(inputs, labels, forecast)
 
@@ -107,7 +149,7 @@ class EvaluateForecaster:
 
 
 def main():
-    evaluator = EvaluateForecaster(log_dir='./logs/LSTMLogger/version_17', stock_id=0)
+    evaluator = EvaluateForecaster(log_dir='./logs/LSTMLogger/version_0', stock_id=0)
     evaluator.eval()
 
 

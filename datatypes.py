@@ -44,6 +44,16 @@ class Stock:
 
         return df
 
+    def get_row(self, date):
+        if type(date) == str:
+            date = pd.to_datetime(date)
+
+        # TODO: Error handling due to invalid type
+        index = self.df.index.get_indexer([date], method='backfill')[0]  # Find NEXT index if no exact match
+        row = self.df.iloc[index]
+
+        return row
+
     def set_date_range(self, start_date=None, final_date=None):
         try:
             start_date = pd.to_datetime(start_date)
