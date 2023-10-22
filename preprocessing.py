@@ -75,26 +75,3 @@ def log_denormalize(y0: pd.DataFrame, y: pd.DataFrame) -> (pd.DataFrame):
     p = log_p.apply(lambda x: np.exp(x))
 
     return p
-
-
-def main():
-    """
-    resample_data('B')
-    resample_data('W')
-    resample_data('M')
-    """
-    df = Stock('./data/daily/NASDAQ-small/SXP.csv').df
-    x0, x = log_normalize(df)
-    print('x0 type: ', type(x0))
-    print('x type: ', type(x))
-
-    p = log_denormalize(x0, x)
-    print('p type: ', type(p))
-
-    print(df.head())
-    print(x.head())
-    print(p.head())
-
-
-if __name__ == "__main__":
-    main()

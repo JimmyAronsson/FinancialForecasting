@@ -3,3 +3,7 @@ __pycache__
 .idea/
 lightning_logs/
 logs/
+
+debug.py
+statsmodels_testing_grounds.py
+transforms.py
