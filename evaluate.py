@@ -76,22 +76,17 @@ class EvaluateForecaster:
 
         forecast = self.forecaster.forward(inputs)[0, :, :]
 
-        self.plot(inputs, labels, forecast)
-
-    def plot(self, inputs, labels, forecast):
-
-        print('size of inputs:', inputs.size())
-        print('size of label:', labels.size())
-        print('size of forecast:', forecast.size())
-
         inputs = inputs.detach().numpy()
         labels = labels.detach().numpy()
         forecast = forecast.detach().numpy()
 
+        self.plot(inputs, labels, forecast)
+
+    def plot(self, inputs, labels, forecast):
+
         axis = range(0, len(forecast[:, 0]))
         input_axis = axis[:len(inputs[:, 0])]
         label_axis = axis[len(inputs[:, 0]):]
-        titles = ['open', 'high', 'low', 'close']
 
         epoch = self._get_epoch()
         model = self.config.model_name
@@ -99,6 +94,8 @@ class EvaluateForecaster:
 
         fig, ax = plt.subplots(4)
         fig.suptitle(f'{ticker} forecast using {model} @ {epoch} epochs')
+
+        titles = ['open', 'high', 'low', 'close']
         for i in range(4):
             ax[i].set_title(titles[i])
             ax[i].plot(input_axis, inputs[:, i], label='Input data')
