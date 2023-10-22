@@ -1,16 +1,17 @@
 import os
 import random
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import models
 
 
 @dataclass
-class Config:
+class FFConfig:
     data_dir: str
     model_name: str
-    # FIXME: time_period currently refers to historic data + future labels, but should only refer to historic data.
+    # FIXME: time_period currently refers to historic data + future labels,
+    #        but should only refer to historic data.
     time_period: Tuple[str, str]  # Example: ('2000-01-01', '2015-01-01')
     forecast_steps: int
     batch_size: int

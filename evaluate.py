@@ -1,11 +1,11 @@
-import os
 import ast
-import torch
-import matplotlib.pyplot as plt
+import os
 
-import models
-from configs import Config
-from datasets import DatasetLSTM
+import matplotlib.pyplot as plt
+import torch
+
+from configs import FFConfig
+from datasets import StockDataset
 from forecasters import FinancialForecaster
 
 
@@ -15,7 +15,7 @@ class EvaluateForecaster:
         self.config = self._create_config()
 
         self.model = self._load_model()
-        self.dataset = DatasetLSTM(self.config, stage='val')
+        self.dataset = StockDataset(self.config, stage='val')
         self.forecaster = FinancialForecaster(self.config)
 
     def _create_config(self):
@@ -28,13 +28,13 @@ class EvaluateForecaster:
                         'val': ast.literal_eval(fdict['filelist_val'])}
 
             # Turn string "['ABC', ..., 'XYZ']" into list ['ABC', ..., 'XYZ']
-            config = Config(data_dir=fdict['data_dir'],
-                            model_name=fdict['model_name'],
-                            time_period=(fdict['start_date'], fdict['final_date']),
-                            forecast_steps=int(fdict['forecast_steps']),
-                            batch_size=int(fdict['batch_size']),
-                            train_split=None,
-                            filelist=filelist)
+            config = FFConfig(data_dir=fdict['data_dir'],
+                              model_name=fdict['model_name'],
+                              time_period=(fdict['start_date'], fdict['final_date']),
+                              forecast_steps=int(fdict['forecast_steps']),
+                              batch_size=int(fdict['batch_size']),
+                              train_split=None,
+                              filelist=filelist)
         return config
 
     def _load_model(self, ckpt_index=-1):

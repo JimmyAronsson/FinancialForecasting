@@ -1,15 +1,16 @@
 import posixpath
-import torch
-from torch.utils.data import Dataset
 from typing import Literal
 
-from configs import Config
+import torch
+from torch.utils.data import Dataset
+
+from configs import FFConfig
 from datatypes import Stock
 from preprocessing import log_normalize
 
 
-class DatasetLSTM(Dataset):
-    def __init__(self, config: Config, stage: Literal['train', 'val']):
+class StockDataset(Dataset):
+    def __init__(self, config: FFConfig, stage: Literal['train', 'val']):
         self.config = config
 
         self.filelist = config.filelist[stage]

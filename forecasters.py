@@ -1,12 +1,10 @@
-import os
 import pytorch_lightning as pl
-import random
 import torch
 from torch.nn import MSELoss
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
-from datasets import DatasetLSTM
+from datasets import StockDataset
 
 
 class FinancialForecaster(pl.LightningModule):
@@ -31,7 +29,7 @@ class FinancialForecaster(pl.LightningModule):
         return forecast
 
     def train_dataloader(self):
-        train_dataset = DatasetLSTM(self.config, stage='train')
+        train_dataset = StockDataset(self.config, stage='train')
         return DataLoader(train_dataset, batch_size=self.config.batch_size, num_workers=4)
 
     def training_step(self, batch, batch_idx):
@@ -46,7 +44,7 @@ class FinancialForecaster(pl.LightningModule):
         return {"loss": loss}
 
     def val_dataloader(self):
-        val_dataset = DatasetLSTM(self.config, stage='val')
+        val_dataset = StockDataset(self.config, stage='val')
         return DataLoader(val_dataset, batch_size=self.config.batch_size, num_workers=4)
 
     def validation_step(self, batch, batch_idx):

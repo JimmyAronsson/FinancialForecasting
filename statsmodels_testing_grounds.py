@@ -1,8 +1,8 @@
 import os
+from itertools import combinations
 
 import matplotlib.pyplot as plt
 import pandas as pd
-from itertools import combinations
 from statsmodels.tsa.ar_model import AutoReg
 from statsmodels.tsa.stattools import adfuller, grangercausalitytests
 

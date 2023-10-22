@@ -1,9 +1,9 @@
 import os
-from pytorch_lightning.utilities import rank_zero_only
+
 from pytorch_lightning.loggers import TensorBoardLogger
 
 
-class LoggerLSTM(TensorBoardLogger):
+class FFLogger(TensorBoardLogger):
 
     @property
     def name(self):
