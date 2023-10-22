@@ -1,24 +1,18 @@
 import posixpath
 import torch
 from torch.utils.data import Dataset
+from typing import Literal
 
+from configs import Config
 from datatypes import Stock
 from preprocessing import log_normalize
 
 
 class DatasetLSTM(Dataset):
-    def __init__(self, data_dir, filelist, forecast_steps=1, start_date='2000-01-01', final_date='2020-01-01', **kwargs):
-        """
-        Creates data of shape [N, L, Ch] where
-           * N = Batch/dataset size
-           * L = Length,
-           * Ch = Channels
-        """
-        self.data_dir = data_dir
-        self.filelist = filelist
-        self.steps = forecast_steps
-        self.start_date = start_date
-        self.final_date = final_date
+    def __init__(self, config: Config, stage: Literal['train', 'val']):
+        self.config = config
+
+        self.filelist = config.filelist[stage]
 
         self.stock_values = []
         self.trend_values = []
@@ -40,10 +34,10 @@ class DatasetLSTM(Dataset):
 
     def __getitem__(self, stock_id):
 
-        path = posixpath.join(self.data_dir, self.filelist[stock_id])
+        path = posixpath.join(self.config.data_dir, self.filelist[stock_id])
         stock = Stock(path=path)
 
-        stock.set_date_range(start_date=self.start_date, final_date=self.final_date)
+        stock.set_date_range(start_date=self.config.time_period[0], final_date=self.config.time_period[1])
         initval, stock.df = log_normalize(stock.df)
 
         # stock.detrend()
@@ -61,8 +55,8 @@ class DatasetLSTM(Dataset):
         time_series = self.__getitem__(stock_id)
 
         if inputs_and_labels:
-            inputs = time_series[:-self.steps, :]
-            label = time_series[-self.steps:, :]
+            inputs = time_series[:-self.config.forecast_steps, :]
+            label = time_series[-self.config.forecast_steps:, :]
             return inputs, label
         else:
             return time_series

@@ -4,8 +4,9 @@ import torch
 import matplotlib.pyplot as plt
 
 import models
+from configs import Config
 from datasets import DatasetLSTM
-from run import FinancialForecaster  # TODO: Shouldn't need to import from run. Refactor.
+from forecasters import FinancialForecaster
 
 
 class EvaluateForecaster:
@@ -13,27 +14,27 @@ class EvaluateForecaster:
         self.log_dir = log_dir
         self.config = self._create_config()
 
-        self.dataset = DatasetLSTM(data_dir=self.config['data_dir'],
-                                   filelist=self.config['val_filelist'],
-                                   start_date=self.config['start_date'],
-                                   final_date=self.config['final_date'],
-                                   forecast_steps=self.config['forecast_steps'])
         self.model = self._load_model()
-        self.forecaster = FinancialForecaster(model=self.model, **self.config)
+        self.dataset = DatasetLSTM(self.config, stage='val')
+        self.forecaster = FinancialForecaster(self.config)
 
     def _create_config(self):
-
-        with open(os.path.join(self.log_dir, 'run_info.txt')) as f:
+        with open(os.path.join(self.log_dir, 'config.txt')) as f:
             # Read from file and split each line into parameter, value pairs
-            run_info = [line.split(':\t') for line in f.read().splitlines()]
-            config = dict((parameter, value) for parameter, value in run_info)
+            flist = [line.split(':\t') for line in f.read().splitlines()]
+            fdict = dict((parameter, value) for parameter, value in flist)
+
+            filelist = {'train': ast.literal_eval(fdict['filelist_train']),
+                        'val': ast.literal_eval(fdict['filelist_val'])}
 
             # Turn string "['ABC', ..., 'XYZ']" into list ['ABC', ..., 'XYZ']
-            config['train_filelist'] = ast.literal_eval(config['train_filelist'])
-            config['val_filelist'] = ast.literal_eval(config['val_filelist'])
-            config['forecast_steps'] = int(config['forecast_steps'])
-            config['batch_size'] = int(config['batch_size'])
-
+            config = Config(data_dir=fdict['data_dir'],
+                            model_name=fdict['model_name'],
+                            time_period=(fdict['start_date'], fdict['final_date']),
+                            forecast_steps=int(fdict['forecast_steps']),
+                            batch_size=int(fdict['batch_size']),
+                            train_split=None,
+                            filelist=filelist)
         return config
 
     def _load_model(self, ckpt_index=-1):
@@ -47,7 +48,7 @@ class EvaluateForecaster:
             state_dict[key.removeprefix('model.')] = value
         ckpt['state_dict'] = state_dict
 
-        model = getattr(models, self.config['model_name'])()  # Extracts and instantiates e.g. SmallLSTM from models.py
+        model = self.config.get_model()  # Extracts and instantiates e.g. SmallLSTM from models.py
 
         model.load_state_dict(state_dict=ckpt['state_dict'])
 
@@ -82,7 +83,7 @@ class EvaluateForecaster:
 
 
 def main():
-    evaluator = EvaluateForecaster(log_dir='./logs/LSTMLogger/version_7')
+    evaluator = EvaluateForecaster(log_dir='./logs/LSTMLogger/version_16')
     evaluator.eval(stock_id=0)
 
 
