@@ -6,7 +6,7 @@ from torch.optim import Adam
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 
-from models import ModelLSTM
+from models import LargeLSTM, SmallLSTM
 from loggers import LSTMLogger
 from datasets import DatasetLSTM
 from callbacks import CallbacksLSTM
@@ -16,6 +16,7 @@ class FinancialForecaster(pl.LightningModule):
     def __init__(self, model, data_dir, batch_size=1, forecast_steps=12,
                  start_date=None, final_date=None, train_split=0.8, **kwargs):
         super().__init__()
+
 
         # TODO: Refactor dates, steps, etc. into config data structure
 
@@ -104,6 +105,7 @@ class FinancialForecaster(pl.LightningModule):
     def log_run_info(self, log_dir):
         with open(os.path.join(log_dir, 'run_info.txt'), 'w') as f:
             f.write(f'data_dir:\t{self.data_dir}')
+            f.write(f'\nmodel_name:\t{self.model.__class__.__name__}')
 
             f.write(f'\nstart_date:\t{self.start_date}')
             f.write(f'\nfinal_date:\t{self.final_date}')
@@ -118,12 +120,12 @@ def main():
     logger = LSTMLogger(save_dir="logs", name="LSTM")
     logger.make_log_dir()
 
-    forecaster = FinancialForecaster(model=ModelLSTM(),
+    forecaster = FinancialForecaster(model=SmallLSTM(),
                                      data_dir='data/monthly/NASDAQ-tiny/',
                                      train_split=0.5,
-                                     start_date='2021-01-01',
-                                     final_date='2023-01-01',
-                                     forecast_steps=5,
+                                     start_date='2000-01-01',
+                                     final_date='2022-01-01',
+                                     forecast_steps=18,
                                      batch_size=1,
                                      )
 
