@@ -3,7 +3,7 @@ from pytorch_lightning.utilities import rank_zero_only
 from pytorch_lightning.loggers import TensorBoardLogger
 
 
-class LSTMLogger(TensorBoardLogger):
+class LoggerLSTM(TensorBoardLogger):
 
     @property
     def name(self):
