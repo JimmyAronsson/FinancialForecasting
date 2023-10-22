@@ -15,7 +15,7 @@ class FFLogger(TensorBoardLogger):
     def log_config(self, config):
         with open(os.path.join(self.log_dir, 'config.txt'), 'w') as f:
             f.write(f'data_dir:\t{config.data_dir}')
-            f.write(f'\nmodel_name:\t{config.get_model().__class__.__name__}')
+            f.write(f'\nmodel_name:\t{config.get_model.__class__.__name__}')
 
             f.write(f'\nstart_date:\t{config.time_period[0]}')
             f.write(f'\nfinal_date:\t{config.time_period[1]}')

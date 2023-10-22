@@ -66,7 +66,7 @@ class EvaluateForecaster:
 
     def _load_model(self):
         ckpt = self._get_ckpt()
-        model = self.config.get_model()
+        model = self.config.get_model
         model.load_state_dict(state_dict=ckpt['state_dict'])
 
         return model

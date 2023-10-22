@@ -12,7 +12,7 @@ class FinancialForecaster(pl.LightningModule):
         super().__init__()
         self.config = config
 
-        self.model = config.get_model()
+        self.model = config.get_model
         self.criterion = MSELoss()  # TODO: Refactor?
         self.save_hyperparameters()
 
